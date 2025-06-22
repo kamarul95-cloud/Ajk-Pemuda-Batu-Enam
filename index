@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8" />
+  <title>Senarai Ahli Jawatankuasa Pemuda</title>
+  <style id="theme-style">
+    body { font-family: Arial, sans-serif; padding: 20px; background-color: #fff; color: #000; }
+    .dark body { background-color: #1c1c1c; color: #eee; }
+    h2 { margin-bottom: 10px; }
+    #search, #jawatanFilter, #templateMsg, #templateMsg2 { width:100%; padding:8px; margin-bottom:10px; border:1px solid #aaa; border-radius:4px; box-sizing:border-box; font-size:14px; }
+    .dark #search, .dark #jawatanFilter, .dark #templateMsg, .dark #templateMsg2 { background-color:#2b2b2b; border-color:#444; color:#eee; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th, td { border:1px solid #ccc; padding:8px; text-align:left; }
+    .dark th, .dark td { border-color:#333; }
+    th { background-color:#eee; }
+    .dark th { background-color:#333; }
+    a { color:#1a73e8; text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    #countInfo { margin-top:10px; font-style:italic; }
+    #toggleTheme, #sendNext { margin-bottom:10px; padding:10px 16px; cursor:pointer; background-color:#1a73e8; color:white; border:none; border-radius:4px; font-size:18px; min-width:280px; }
+    #toggleTheme:hover, #sendNext:hover { background-color:#155ab6; }
+    label { font-weight:bold; margin-top:10px; display:block; }
+    #progressContainer { margin-top:10px; width:100%; background-color:#ddd; border-radius:5px; height:24px; overflow:hidden; }
+    #progressBar { height:100%; background-color:#1a73e8; width:0%; transition:width 0.3s ease; color:white; text-align:center; line-height:24px; font-weight:bold; user-select:none; }
+    #progressText { margin-top:5px; font-style:italic; text-align:center; }
+  </style>
+</head>
+<body>
+  <button id="toggleTheme">Tukar ke Mod Gelap</button>
+  <h2>Senarai Ahli Jawatankuasa Pemuda</h2>
+  <input type="text" id="search" placeholder="Cari nama atau jawatan…" />
+  <select id="jawatanFilter"><option value="">Tapis mengikut jawatan…</option></select>
+  <label for="templateMsg2">Preset spintax salam (boleh edit):</label>
+  <textarea id="templateMsg2" rows="3">{_Assalamualaikum_|_Assalamualaikum wbt_|_السَّلَامُ عَلَيْكُمْ_|_Salam_|_As Salam_}
+
+*[nama]*
+  </textarea>
+  <label for="templateMsg">Template mesej (gunakan [nama] untuk gantikan nama):</label>
+  <textarea id="templateMsg" rows="3" placeholder="Tulis mesej utama di sini…"></textarea>
+  <button id="sendNext">Hantar Mesej 1 demi 1</button>
+  <div id="progressContainer" style="display:none;"><div id="progressBar">0%</div></div>
+  <div id="progressText"></div>
+  <p id="countInfo"></p>
+  <table id="senarai"><thead><tr><th>Bil</th><th>Nama</th><th>Jawatan</th><th>No. IC</th><th>No. Telefon</th></tr></thead><tbody></tbody></table>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  <script>
+    const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vST5hzud3ginF9kH_cfBEZFA79gVWj8AbRcueDa-k55_ax3w9DscqXJiKKgJz9PChl3jEILiA96tiJ7/pub?gid=0&single=true&output=csv";
+    let allRows = [], currentIndex = 0;
+
+    fetch(url)
+      .then(r => r.text())
+      .then(csv => {
+        const res = Papa.parse(csv, { skipEmptyLines: true });
+        allRows = res.data.slice(1); // skip header row
+        init();
+      });
+
+    function init() {
+      populateFilter(allRows);
+      populateTable(allRows);
+      updateSendButton();
+    }
+
+    function spinText(spintax) {
+      return spintax.replace(/\{([^{}]+)\}/g, (_,g) => {
+        const opts = g.split('|').map(s => s.trim());
+        return opts[Math.floor(Math.random()*opts.length)];
+      });
+    }
+    function replaceName(text, nama) { return text.replace(/\[nama\]/gi, nama.trim()); }
+
+    function populateFilter(rows) {
+      const sel = document.getElementById('jawatanFilter');
+      const set = new Set(rows.map(r => r[2]||'').filter(j=>j));
+      Array.from(set).sort().forEach(j => sel.add(new Option(j,j)));
+    }
+
+    function filterRows() {
+      const kw = document.getElementById('search').value.toLowerCase();
+      const job = document.getElementById('jawatanFilter').value;
+      return allRows.filter(r => {
+        const nama = (r[1]||'').toLowerCase();
+        const jaw = (r[2]||'').toLowerCase();
+        return (nama.includes(kw) || jaw.includes(kw)) && (job ? r[2]===job : true);
+      });
+    }
+
+    function populateTable(rows) {
+      const tbody = document.querySelector('#senarai tbody'); tbody.innerHTML = '';
+      rows.forEach((cols, i) => {
+        const bil = cols[0] || i+1;
+        const nama = cols[1] || '-';
+        const jawatan = cols[2] || '-';
+        const ic = cols[3] || '-';
+        let telRaw = cols[4] || '';
+        let tel = telRaw.replace(/[^0-9]/g,'');
+        if (tel.startsWith('0')) tel = '60' + tel.slice(1);
+        const salam = spinText(replaceName(document.getElementById('templateMsg2').value.trim(), nama));
+        const main = replaceName(document.getElementById('templateMsg').value.trim(), nama);
+        const full = `${salam}\n\n${main}`;
+        const waLink = tel ? `<a href="https://wa.me/${tel}?text=${encodeURIComponent(full)}" target="_blank">${telRaw}</a>` : '-';
+        tbody.insertAdjacentHTML('beforeend', `
+          <tr><td>${bil}</td><td>${nama}</td><td>${jawatan}</td><td>${ic}</td><td>${waLink}</td></tr>
+        `);
+      });
+      document.getElementById('countInfo').textContent = `Jumlah rekod: ${rows.length}`;
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const rows = filterRows(); const total = rows.length;
+      const done = Math.min(currentIndex, total);
+      const pct = total ? Math.round(done/total*100) : 0;
+      document.getElementById('progressContainer').style.display = total ? 'block':'none';
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('progressBar').textContent = pct + '%';
+      document.getElementById('progressText').textContent = total ? `Sudah dihantar ${done} daripada ${total}` : '';
+    }
+
+    function updateSendButton() {
+      const rows = filterRows(); const btn = document.getElementById('sendNext');
+      if (!rows.length) return btn.textContent = 'Tiada rekod untuk dihantar';
+      btn.textContent = currentIndex >= rows.length ?
+        'Semua mesej telah dihantar (Tekan untuk mula semula)' :
+        `Hantar Mesej ke #${currentIndex+1}: ${rows[currentIndex][1]||'-'}`;
+    }
+
+    ['search','jawatanFilter','templateMsg','templateMsg2'].forEach(id =>
+      document.getElementById(id).addEventListener('input', () => { currentIndex=0; populateTable(filterRows()); updateSendButton(); })
+    );
+
+    document.getElementById('toggleTheme').addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      document.getElementById('toggleTheme').textContent = document.documentElement.classList.contains('dark') ? 'Tukar ke Mod Terang' : 'Tukar ke Mod Gelap';
+    });
+
+    document.getElementById('sendNext').addEventListener('click', () => {
+      const rows = filterRows();
+      if (!rows.length) { return alert('Tiada rekod untuk dihantar mesej.'); }
+      if (currentIndex >= rows.length) { alert('Semua mesej telah dihantar. Mula semula.'); currentIndex=0; updateSendButton(); return; }
+      const cols = rows[currentIndex];
+      const nama = cols[1] || '-';
+      let telRaw = cols[4] || '';
+      let tel = telRaw.replace(/[^0-9]/g,'');
+      if (tel.startsWith('0')) tel = '60'+tel.slice(1);
+      if (!tel) { alert(`Tiada nombor telefon untuk ${nama}.`); currentIndex++; updateSendButton(); updateProgress(); return; }
+      const sal = spinText(replaceName(document.getElementById('templateMsg2').value.trim(), nama));
+      const mai = replaceName(document.getElementById('templateMsg').value.trim(), nama);
+      window.open(`https://wa.me/${tel}?text=${encodeURIComponent(sal+"\n\n"+mai)}`, '_blank');
+      currentIndex++; updateSendButton(); updateProgress();
+    });
+  </script>
+</body>
+</html>
